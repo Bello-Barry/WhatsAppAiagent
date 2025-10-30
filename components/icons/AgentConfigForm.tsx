@@ -54,7 +54,8 @@ const AgentConfigForm: React.FC<AgentConfigFormProps> = ({ agent, onUpdate }) =>
             <label htmlFor="llm_provider" className="block text-sm font-medium text-dark-text-secondary">AI Model Provider</label>
             {/* FIX: Replaced custom 'input-style' class with Tailwind CSS classes to resolve style jsx error. */}
             <select name="llm_provider" id="llm_provider" value={formData.llm_provider} onChange={handleChange} className="mt-1 block w-full bg-gray-900 border border-dark-border rounded-md shadow-sm py-2 px-3 text-dark-text-primary focus:outline-none focus:ring-brand-primary focus:border-brand-primary sm:text-sm">
-              {Object.values(LlmProvider).map(provider => (
+              {/* FIX: Explicitly typed `provider` as `string` to resolve type inference issues. */}
+              {Object.values(LlmProvider).map((provider: string) => (
                 <option key={provider} value={provider}>{provider.toUpperCase()}</option>
               ))}
             </select>

@@ -46,3 +46,5 @@ export class MemoryManager {
     }
   }
 }
+
+export const memoryManager = new MemoryManager();

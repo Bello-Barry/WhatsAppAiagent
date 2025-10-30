@@ -1,15 +1,13 @@
 import { isJidUser } from '@whiskeysockets/baileys';
 import { getLLMResponse } from '../ai/llm-router.js';
 import logger from '../utils/logger.js';
-import { MemoryManager } from '../ai/memory-manager.js';
+import { memoryManager } from '../ai/memory-manager.js'; // Use singleton instance
 
 // Anti-spam and rate limiting config
 const MESSAGE_DELAY_MS = 1500 + Math.random() * 1000; // Simulate human-like delay
 const recentMessages = new Set();
 const SPAM_WINDOW_MS = 5000; // 5 seconds window
 const MAX_MESSAGES_IN_WINDOW = 3;
-
-const memoryManager = new MemoryManager();
 
 /**
  * Handles an incoming message for a specific agent.
@@ -49,7 +47,7 @@ export const handleMessage = async (msg, agent) => {
   const handoverRegex = new RegExp(`parler à ${agent.config.ownerName}`, 'i');
   if (handoverRegex.test(messageContent)) {
     logger.info({ senderId }, 'User requested human handover.');
-    await agent.sock.sendMessage(from, { text: "D'accord, je préviens John. Il vous répondra dès que possible." });
+    await agent.sock.sendMessage(from, { text: `D'accord, je préviens ${agent.config.ownerName}. Il vous répondra dès que possible.` });
     // TODO: Implement a notification system (email, Slack, etc.) to alert the owner.
     return;
   }

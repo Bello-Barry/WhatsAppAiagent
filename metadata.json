@@ -1,0 +1,5 @@
+{
+  "name": "WhatsApp AI Agent Dashboard",
+  "description": "A comprehensive SaaS platform to create and manage multiple autonomous AI-based WhatsApp agents. Each agent is linked to a distinct user, acting as a personal assistant.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,35 @@
+{
+  "name": "whatsapp-ai-saas-backend",
+  "version": "1.0.0",
+  "description": "Backend for the WhatsApp AI SaaS Platform",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "ai",
+    "saas",
+    "nodejs",
+    "baileys",
+    "gemini"
+  ],
+  "author": "AI Architect",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^0.1.0",
+    "@whiskeysockets/baileys": "^6.5.0",
+    "axios": "^1.6.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "p-queue": "^7.4.1",
+    "pino": "^8.17.1",
+    "qrcode": "^1.5.3"
+  },
+  "devDependencies": {
+    "pino-pretty": "^10.3.0"
+  }
+}

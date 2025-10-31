@@ -1,6 +1,6 @@
 import { User, Agent, Conversation, AgentStats, McpTool } from '../types';
 
-const API_BASE_URL = '/api'; // Using a relative path, assuming the frontend is served by the backend or a proxy
+const API_BASE_URL = 'http://localhost:3001/api'; // Pointing to the default backend port
 
 const handleResponse = async (response: Response) => {
     if (!response.ok) {

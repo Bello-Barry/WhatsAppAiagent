@@ -54,6 +54,19 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  addKnowledge: async (agentId: string, content: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/agents/${agentId}/knowledge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+    });
+    // This endpoint might not return a body on success, so we just check for ok status
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'An unknown error occurred' }));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+  },
   
   getMcpTools: (agentId: string): Promise<McpTool[]> => {
       // This is still mocked as the backend doesn't have a real tool management system yet

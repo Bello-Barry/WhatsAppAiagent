@@ -50,3 +50,10 @@ export interface AgentStats {
     messages_received: number;
     avg_response_time_ms: number;
 }
+
+export interface Knowledge {
+    id: string;
+    agent_id: string;
+    content: string;
+    created_at: string;
+}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { agentManager } from '../../core/agent-manager.js';
 import { memoryManager } from '../../ai/memory-manager.js';
+import { knowledgeManager } from '../../ai/knowledge-manager.js';
 import logger from '../../utils/logger.js';
 
 const router = Router();
@@ -125,6 +126,39 @@ router.get('/:agentId/conversations', (req, res) => {
     }
 
     res.status(200).json(conversations);
+});
+
+// POST /api/agents/:agentId/knowledge - Add to knowledge base
+router.post('/:agentId/knowledge', (req, res) => {
+    const { agentId } = req.params;
+    const { content } = req.body;
+
+    if (!agentManager.getAgent(agentId)) {
+        return res.status(404).json({ error: 'Agent not found' });
+    }
+    if (!content || typeof content !== 'string') {
+        return res.status(400).json({ error: 'Content must be a non-empty string' });
+    }
+
+    knowledgeManager.addContent(agentId, content);
+    res.status(201).json({ success: true, message: 'Knowledge added.' });
+});
+
+// GET /api/agents/:agentId/knowledge - Get knowledge base
+router.get('/:agentId/knowledge', (req, res) => {
+    const { agentId } = req.params;
+    if (!agentManager.getAgent(agentId)) {
+        return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    const knowledge = knowledgeManager.getKnowledge(agentId);
+    // In a real app, this would be structured data from a DB
+    const response = knowledge.map((content, index) => ({
+        id: `${agentId}-kb-${index}`,
+        content: content,
+        created_at: new Date().toISOString()
+    }));
+    res.status(200).json(response);
 });
 
 export default router;

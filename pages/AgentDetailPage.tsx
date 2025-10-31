@@ -9,7 +9,7 @@ import QRCodeDisplay from '../components/QRCodeDisplay';
 const AgentConfigForm = React.lazy(() => import('../components/AgentConfigForm'));
 const ConversationHistory = React.lazy(() => import('../components/ConversationHistory'));
 const StatCard = React.lazy(() => import('../components/StatCard'));
-// FIX: Removed the lazy import for McpToolsManager to resolve the redeclaration error, as the component is defined locally within this file.
+const KnowledgeBaseManager = React.lazy(() => import('../components/KnowledgeBaseManager'));
 
 
 const AgentDetailPage: React.FC = () => {
@@ -20,7 +20,7 @@ const AgentDetailPage: React.FC = () => {
   const [tools, setTools] = useState<McpTool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'config' | 'stats' | 'tools'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'config' | 'stats' | 'tools' | 'knowledge'>('conversations');
 
   useEffect(() => {
     if (!id) return;
@@ -50,7 +50,7 @@ const AgentDetailPage: React.FC = () => {
     fetchData();
   }, [id]);
   
-  const TabButton = ({ tabName, label }: { tabName: 'conversations' | 'config' | 'stats' | 'tools', label: string }) => (
+  const TabButton = ({ tabName, label }: { tabName: 'conversations' | 'config' | 'stats' | 'tools' | 'knowledge', label: string }) => (
       <button
         onClick={() => setActiveTab(tabName)}
         className={`px-4 py-2 font-medium text-sm rounded-md transition-colors ${activeTab === tabName ? 'bg-brand-primary text-white' : 'text-dark-text-secondary hover:bg-dark-card'}`}
@@ -87,6 +87,7 @@ const AgentDetailPage: React.FC = () => {
               <TabButton tabName="conversations" label="Conversations" />
               <TabButton tabName="stats" label="Statistics" />
               <TabButton tabName="config" label="Configuration" />
+              <TabButton tabName="knowledge" label="Knowledge Base" />
               <TabButton tabName="tools" label="MCP Tools" />
           </nav>
       </div>
@@ -96,6 +97,7 @@ const AgentDetailPage: React.FC = () => {
             {activeTab === 'conversations' && <ConversationHistory conversations={conversations} />}
             {activeTab === 'config' && <AgentConfigForm agent={agent} onUpdate={setAgent} />}
             {activeTab === 'stats' && <StatCard stats={stats} />}
+            {activeTab === 'knowledge' && <KnowledgeBaseManager />}
             {activeTab === 'tools' && <McpToolsManager tools={tools} onUpdate={setTools} />}
         </Suspense>
       </div>

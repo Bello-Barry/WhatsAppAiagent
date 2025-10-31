@@ -1,71 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../services/mockApi';
+import { Agent } from '../types';
 
 interface QRCodeDisplayProps {
-  agentId: string;
+  agent: Agent;
 }
 
-const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ agentId }) => {
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState<'LOADING' | 'WAITING' | 'QR_CODE' | 'CONNECTED' | 'ERROR'>('LOADING');
-  const [errorMessage, setErrorMessage] = useState('');
-  const intervalRef = useRef<number | null>(null);
-
-  const fetchStatus = async () => {
-    try {
-      const response = await api.getQRCode(agentId);
-      switch (response.status) {
-        case 'CONNECTED':
-          setStatus('CONNECTED');
-          setQrCodeUrl(null);
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          // Reload to reflect the new active status of the agent
-          setTimeout(() => window.location.reload(), 1500);
-          break;
-        case 'QR_CODE':
-          setStatus('QR_CODE');
-          setQrCodeUrl(response.qr || null);
-          break;
-        case 'WAITING':
-          setStatus('WAITING');
-          setQrCodeUrl(null);
-          break;
-        default:
-          setStatus('ERROR');
-          setErrorMessage('Received an unknown status from server.');
-      }
-    } catch (err) {
-      console.error(err);
-      setStatus('ERROR');
-      setErrorMessage('Failed to connect to the server. Please try again later.');
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-  };
+const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ agent }) => {
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(agent.qr_code_url);
   
   useEffect(() => {
-    fetchStatus(); // Initial fetch
-    intervalRef.current = window.setInterval(fetchStatus, 5000); // Poll every 5 seconds
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId]);
+      setQrCodeUrl(agent.qr_code_url);
+  }, [agent.qr_code_url]);
 
   const renderContent = () => {
-    switch (status) {
-        case 'LOADING':
-        case 'WAITING':
+    switch (agent.connection_status) {
+        case 'CONNECTING':
+        case 'DISCONNECTED':
+            if (qrCodeUrl) {
+                return <img src={qrCodeUrl} alt="WhatsApp QR Code" className="rounded-lg w-full h-full" />;
+            }
             return (
-                <div className="text-center">
+                <div className="text-center p-4">
                     <div className="w-10 h-10 border-4 border-t-brand-primary border-gray-700 rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-dark-text-secondary">Waiting for QR code from server...</p>
+                    <p className="mt-4 text-dark-text-secondary text-sm">Waiting for QR code from server...</p>
                 </div>
             );
-        case 'QR_CODE':
-            return qrCodeUrl ? <img src={qrCodeUrl} alt="WhatsApp QR Code" className="rounded-lg w-full h-full" /> : <p className="text-red-500">Error: QR data is missing.</p>;
         case 'CONNECTED':
             return (
                 <div className="text-center">
@@ -73,11 +32,10 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({ agentId }) => {
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                     <p className="mt-4 font-semibold text-green-400">Agent Connected!</p>
-                    <p className="text-sm text-dark-text-secondary">The page will now reload.</p>
                 </div>
             );
-        case 'ERROR':
-            return <p className="text-red-500 text-sm text-center px-4">{errorMessage}</p>;
+        case 'LOGGED_OUT':
+            return <p className="text-red-500 text-sm text-center px-4">This agent was logged out. Please try to connect again.</p>;
         default:
             return null;
     }

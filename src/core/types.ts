@@ -1,7 +1,6 @@
-
 export interface User {
   id: string;
-  email: string;
+  email: string | undefined;
 }
 
 export enum LlmProvider {
@@ -13,27 +12,32 @@ export enum LlmProvider {
 export interface Agent {
   id: string;
   user_id: string;
-  phone_number: string;
+  phone_number: string | null;
   owner_name: string;
   assistant_name: string;
   llm_provider: LlmProvider;
-  custom_prompt: string;
+  custom_prompt: string | null;
   is_active: boolean;
   created_at: string;
+  qr_code_url: string | null;
+  connection_status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'LOGGED_OUT' | string;
 }
 
 export interface Message {
+  id?: number;
+  conversation_id: string;
   sender: 'user' | 'assistant' | 'system';
   content: string;
-  timestamp: string;
+  created_at: string;
 }
 
 export interface Conversation {
   id: string;
   agent_id: string;
   contact_number: string;
-  messages: Message[];
-  last_message_at: string;
+  messages?: Message[]; // Messages might be loaded separately
+  last_message_at: string | null;
+  created_at: string;
 }
 
 export interface McpTool {
@@ -52,7 +56,7 @@ export interface AgentStats {
 }
 
 export interface Knowledge {
-    id: string;
+    id: number;
     agent_id: string;
     content: string;
     created_at: string;

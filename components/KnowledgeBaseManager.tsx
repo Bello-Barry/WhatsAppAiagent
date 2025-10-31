@@ -1,23 +1,32 @@
-import React, { useState } from 'react';
-import { api } from '../services/mockApi';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { supabaseApi } from '../services/supabaseApi';
+import { Knowledge } from '../types';
 
-// Simple interface for now. In a real app, this would be more complex.
-interface Knowledge {
-  id: string;
-  content: string;
-  createdAt: string;
+interface KnowledgeBaseManagerProps {
+    agentId: string;
 }
 
-const KnowledgeBaseManager: React.FC = () => {
-    const { id: agentId } = useParams<{ id: string }>();
+const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({ agentId }) => {
     const [knowledgeItems, setKnowledgeItems] = useState<Knowledge[]>([]);
     const [newKnowledge, setNewKnowledge] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // In a real app, you'd fetch existing knowledge here.
-    // For this example, we'll keep it simple.
+    useEffect(() => {
+        if (!agentId) return;
+
+        const fetchKnowledge = async () => {
+            try {
+                const items = await supabaseApi.getKnowledge(agentId);
+                setKnowledgeItems(items);
+            } catch (err) {
+                console.error(err);
+                setError('Failed to fetch knowledge base.');
+            }
+        };
+        fetchKnowledge();
+    }, [agentId]);
+
 
     const handleAddKnowledge = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,10 +35,8 @@ const KnowledgeBaseManager: React.FC = () => {
         setLoading(true);
         setError('');
         try {
-            // In a real app, the API would return the newly created item
-            await api.addKnowledge(agentId, newKnowledge);
-            // For the UI, we'll just add it locally with a mock ID
-            setKnowledgeItems(prev => [...prev, { id: `local-${Date.now()}`, content: newKnowledge, createdAt: new Date().toISOString() }]);
+            const newItem = await supabaseApi.addKnowledge(agentId, newKnowledge);
+            setKnowledgeItems(prev => [...prev, newItem]);
             setNewKnowledge('');
         } catch (err) {
             setError('Failed to add knowledge.');
@@ -53,8 +60,8 @@ const KnowledgeBaseManager: React.FC = () => {
                 />
                 <button
                     type="submit"
-                    disabled={loading}
-                    className="mt-3 px-5 py-2.5 text-sm font-medium bg-brand-primary text-white rounded-lg hover:bg-brand-secondary disabled:bg-gray-600"
+                    disabled={loading || !newKnowledge.trim()}
+                    className="mt-3 px-5 py-2.5 text-sm font-medium bg-brand-primary text-white rounded-lg hover:bg-brand-secondary disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                     {loading ? 'Adding...' : 'Add to Knowledge Base'}
                 </button>

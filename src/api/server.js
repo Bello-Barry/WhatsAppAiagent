@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import logger from '../utils/logger.js';
 import qrRoutes from './routes/qr.js';
-import authRoutes from './routes/auth.js';
 import agentRoutes from './routes/agents.js';
 
 export const startApiServer = (port) => {
@@ -23,7 +22,6 @@ export const startApiServer = (port) => {
     res.json({ status: 'ok', message: 'WhatsApp AI SaaS API is running' });
   });
   
-  app.use('/api/auth', authRoutes);
   app.use('/api/qr', qrRoutes);
   app.use('/api/agents', agentRoutes);
 

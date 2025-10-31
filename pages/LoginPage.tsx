@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { BotIcon } from '../components/icons/BotIcon';
 
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('client@saas.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -16,8 +15,8 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     try {
       await login(email, password);
-    } catch (err) {
-      setError('Failed to login. Please check your credentials.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -43,6 +42,7 @@ const LoginPage: React.FC = () => {
                         onChange={(e) => setEmail(e.target.value)}
                         className="mt-1 block w-full bg-gray-900 border border-dark-border rounded-md shadow-sm py-2 px-3 text-dark-text-primary focus:outline-none focus:ring-brand-primary focus:border-brand-primary sm:text-sm"
                         required
+                        placeholder="you@example.com"
                     />
                 </div>
                 <div>
@@ -54,6 +54,7 @@ const LoginPage: React.FC = () => {
                         onChange={(e) => setPassword(e.target.value)}
                         className="mt-1 block w-full bg-gray-900 border border-dark-border rounded-md shadow-sm py-2 px-3 text-dark-text-primary focus:outline-none focus:ring-brand-primary focus:border-brand-primary sm:text-sm"
                         required
+                        placeholder="••••••••"
                     />
                 </div>
 
@@ -69,7 +70,6 @@ const LoginPage: React.FC = () => {
                     </button>
                 </div>
             </form>
-             <p className="mt-4 text-center text-xs text-dark-text-secondary">Use client@saas.com / password</p>
         </div>
       </div>
     </div>

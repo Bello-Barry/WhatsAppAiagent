@@ -1,28 +1,33 @@
-
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/mockApi';
+import { supabaseApi } from '../services/supabaseApi';
 import { Agent } from '../types';
 import AgentListItem from '../components/AgentListItem';
+import { useAuth } from '../hooks/useAuth';
 
 const DashboardPage: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
+    if (!user) return;
+    
     const fetchAgents = async () => {
       try {
         setLoading(true);
-        const agentData = await api.getAgents();
+        setError(null);
+        const agentData = await supabaseApi.getAgents();
         setAgents(agentData);
       } catch (err) {
         setError('Failed to fetch agents.');
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
     fetchAgents();
-  }, []);
+  }, [user]);
 
   return (
     <div className="space-y-8">

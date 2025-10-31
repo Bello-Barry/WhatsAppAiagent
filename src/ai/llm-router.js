@@ -1,12 +1,31 @@
 import { GoogleGenAI } from '@google/genai';
 import logger from '../utils/logger.js';
-import { knowledgeManager } from './knowledge-manager.js';
+import { supabase } from '../core/supabase-client.js';
 
 let gemini;
 if (process.env.GEMINI_API_KEY) {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  gemini = ai;
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    gemini = ai;
 }
+
+const getKnowledgeAsContext = async (agentId) => {
+    const { data, error } = await supabase
+        .from('knowledge')
+        .select('content')
+        .eq('agent_id', agentId);
+    
+    if (error) {
+        logger.error(error, `Failed to fetch knowledge for agent ${agentId}`);
+        return '';
+    }
+
+    if (!data || data.length === 0) {
+        return '';
+    }
+    const knowledge = data.map(item => item.content);
+    return `\n\n--- Knowledge Base ---\nHere is some information you should use to answer user questions:\n${knowledge.join('\n---\n')}\n--- End of Knowledge Base ---`;
+}
+
 
 const getGeminiResponse = async (prompt, history, systemPrompt, agentId) => {
   if (!gemini) {
@@ -16,7 +35,7 @@ const getGeminiResponse = async (prompt, history, systemPrompt, agentId) => {
   const model = 'gemini-2.5-flash';
   logger.info(`Querying Gemini model: ${model} for agent ${agentId}`);
 
-  const knowledgeContext = knowledgeManager.getKnowledgeAsContext(agentId);
+  const knowledgeContext = await getKnowledgeAsContext(agentId);
   const fullSystemPrompt = `${systemPrompt}${knowledgeContext}`;
 
   const chat = gemini.chats.create({
@@ -25,7 +44,7 @@ const getGeminiResponse = async (prompt, history, systemPrompt, agentId) => {
         systemInstruction: fullSystemPrompt,
       },
       history: history.map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : msg.role,
+        role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }]
       }))
   });

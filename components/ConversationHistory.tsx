@@ -1,43 +1,67 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, Message } from '../types';
 import { SendIcon } from './icons/SendIcon';
+import { supabaseApi } from '../services/supabaseApi';
+import { supabase } from '../supabase/client';
 
 interface ConversationHistoryProps {
   conversations: Conversation[];
+  setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
+  agentId: string;
 }
 
-const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations }) => {
+const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations, setConversations, agentId }) => {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(conversations[0] || null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedConversation?.messages]);
+    if (!selectedConversation) return;
 
-  const handleSendMessage = (e: React.FormEvent) => {
+    const fetchMessages = async () => {
+        const fetchedMessages = await supabaseApi.getMessages(selectedConversation.id);
+        setMessages(fetchedMessages);
+    }
+    fetchMessages();
+
+    const channel = supabase.channel(`conversation-${selectedConversation.id}`)
+        .on<Message>(
+            'postgres_changes', 
+            { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${selectedConversation.id}` }, 
+            payload => {
+                setMessages(currentMessages => [...currentMessages, payload.new as Message]);
+            }
+        )
+        .subscribe();
+    
+    return () => {
+        supabase.removeChannel(channel);
+    }
+
+  }, [selectedConversation]);
+
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConversation) return;
 
-    const userMessage: Message = {
-      sender: 'user',
-      content: newMessage,
-      timestamp: new Date().toISOString()
-    };
-    
-    // This is a mock. In a real app, this would be an API call.
-    setSelectedConversation(prev => {
-        if (!prev) return null;
-        return {
-            ...prev,
-            messages: [...prev.messages, userMessage],
-            last_message_at: new Date().toISOString()
-        }
-    });
-
-    setNewMessage('');
+    try {
+        await supabaseApi.sendMessage(selectedConversation.id, newMessage, 'user');
+        setNewMessage('');
+    } catch(err) {
+        console.error("Failed to send message", err);
+    }
   };
+  
+  const handleSelectConversation = (convo: Conversation) => {
+      setMessages([]); // Clear messages while new ones are loading
+      setSelectedConversation(convo);
+  }
 
   if (conversations.length === 0) {
       return (
@@ -54,13 +78,13 @@ const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations
         {conversations.map(convo => (
           <div
             key={convo.id}
-            onClick={() => setSelectedConversation(convo)}
+            onClick={() => handleSelectConversation(convo)}
             className={`p-4 cursor-pointer border-b border-dark-border last:border-b-0 ${selectedConversation?.id === convo.id ? 'bg-brand-primary/10' : 'hover:bg-gray-900/50'}`}
           >
             <p className="font-semibold">{convo.contact_number}</p>
-            <p className="text-sm text-dark-text-secondary truncate">
+            {/* <p className="text-sm text-dark-text-secondary truncate">
               {convo.messages[convo.messages.length - 1].content}
-            </p>
+            </p> */}
           </div>
         ))}
       </div>
@@ -70,12 +94,12 @@ const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations
         {selectedConversation ? (
           <>
             <div className="flex-1 p-6 overflow-y-auto space-y-4">
-              {selectedConversation.messages.map((msg, index) => (
+              {messages.map((msg, index) => (
                 <div key={index} className={`flex ${msg.sender === 'assistant' ? 'justify-start' : 'justify-end'}`}>
                   <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender === 'assistant' ? 'bg-gray-700 rounded-bl-none' : 'bg-brand-secondary text-white rounded-br-none'}`}>
                     <p className="text-sm">{msg.content}</p>
                     <p className="text-xs opacity-60 text-right mt-1">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>

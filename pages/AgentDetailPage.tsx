@@ -1,16 +1,48 @@
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, Suspense, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabaseApi } from '../services/supabaseApi';
-import { Agent, Conversation, AgentStats, McpTool, Message } from '../types';
+import { api } from '../services/api';
+import { Agent, Conversation, AgentStats, McpTool } from '../types';
 import { PowerIcon } from '../components/icons/PowerIcon';
 import QRCodeDisplay from '../components/QRCodeDisplay';
-import { supabase } from '../supabase/client';
-import { RealtimeChannel } from '@supabase/supabase-js';
 
 const AgentConfigForm = React.lazy(() => import('../components/AgentConfigForm'));
 const ConversationHistory = React.lazy(() => import('../components/ConversationHistory'));
 const StatCard = React.lazy(() => import('../components/StatCard'));
-const KnowledgeBaseManager = React.lazy(() => import('../components/KnowledgeBaseManager'));
+
+const McpToolsManager: React.FC<{ tools: McpTool[]; onUpdate: (tools: McpTool[]) => void }> = ({ tools, onUpdate }) => {
+    const handleToggle = async (toolId: string, enabled: boolean) => {
+        try {
+            const updatedTool = await api.toggleMcpTool(toolId, enabled);
+            onUpdate(tools.map(t => t.id === toolId ? updatedTool : t));
+        } catch (error) {
+            console.error("Failed to toggle MCP tool:", error);
+            // Optionally show an error to the user
+        }
+    };
+
+    if (tools.length === 0) {
+      return <div className="text-center p-8 bg-dark-card rounded-lg">No MCP tools configured for this agent.</div>
+    }
+
+    return (
+        <div className="bg-dark-card border border-dark-border rounded-lg p-6 space-y-4">
+            {tools.map(tool => (
+                <div key={tool.id} className="flex items-center justify-between bg-gray-900 p-4 rounded-lg">
+                    <div>
+                        <p className="font-semibold">{tool.tool_name}</p>
+                        <p className={`text-xs ${tool.tool_config.auth_status === 'connected' ? 'text-green-400' : 'text-yellow-400'}`}>
+                            Status: {tool.tool_config.auth_status}
+                        </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked={tool.is_enabled} onChange={(e) => handleToggle(tool.id, e.target.checked)} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary"></div>
+                    </label>
+                </div>
+            ))}
+        </div>
+    );
+};
 
 
 const AgentDetailPage: React.FC = () => {
@@ -21,53 +53,58 @@ const AgentDetailPage: React.FC = () => {
   const [tools, setTools] = useState<McpTool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'config' | 'stats' | 'tools' | 'knowledge'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'config' | 'stats' | 'tools'>('conversations');
 
-  useEffect(() => {
+  const fetchAgentData = useCallback(async () => {
     if (!id) return;
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        // Fetch agent and conversations in parallel
-        const [agentData, convosData, statsData] = await Promise.all([
-            supabaseApi.getAgentById(id),
-            supabaseApi.getConversations(id),
-            supabaseApi.getAgentStats(id), // Assuming this is still valid or will be adapted
-        ]);
-
+     try {
+        const agentData = await api.getAgentById(id);
         if (agentData) {
           setAgent(agentData);
-          setConversations(convosData);
-          setStats(statsData);
-          // setTools(toolsData); // TODO: Implement tool fetching from Supabase
         } else {
           setError('Agent not found.');
         }
       } catch (err) {
-        console.error(err);
-        setError('Failed to fetch agent details.');
+        setError('Failed to refresh agent data.');
+      }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const fetchAllData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [agentData, convosData, statsData, toolsData] = await Promise.all([
+          api.getAgentById(id),
+          api.getConversations(id),
+          api.getAgentStats(id),
+          api.getMcpTools(id)
+        ]);
+        if (agentData) {
+          setAgent(agentData);
+          setConversations(convosData);
+          setStats(statsData);
+          setTools(toolsData);
+        } else {
+          setError('Agent not found.');
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to fetch agent details.');
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
-    
-    // Subscribe to agent changes
-    const channel = supabase.channel(`agent-${id}-changes`)
-        .on<Agent>('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'agents', filter: `id=eq.${id}` }, payload => {
-            console.log('Agent updated remotely:', payload.new);
-            setAgent(payload.new as Agent);
-        })
-        .subscribe();
-        
-    return () => {
-        supabase.removeChannel(channel);
-    }
-
+    fetchAllData();
   }, [id]);
   
-  const TabButton = ({ tabName, label }: { tabName: 'conversations' | 'config' | 'stats' | 'tools' | 'knowledge', label: string }) => (
+  const handleConnectionSuccess = () => {
+      console.log("Connection successful, refreshing agent data...");
+      // Refetch agent data to update the is_active status
+      fetchAgentData();
+  }
+
+  const TabButton = ({ tabName, label }: { tabName: 'conversations' | 'config' | 'stats' | 'tools', label: string }) => (
       <button
         onClick={() => setActiveTab(tabName)}
         className={`px-4 py-2 font-medium text-sm rounded-md transition-colors ${activeTab === tabName ? 'bg-brand-primary text-white' : 'text-dark-text-secondary hover:bg-dark-card'}`}
@@ -97,62 +134,27 @@ const AgentDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {!agent.is_active && <QRCodeDisplay agent={agent} />}
+      {!agent.is_active && <QRCodeDisplay agentId={agent.id} onConnected={handleConnectionSuccess} />}
       
       <div className="border-b border-dark-border">
           <nav className="flex space-x-2" aria-label="Tabs">
               <TabButton tabName="conversations" label="Conversations" />
               <TabButton tabName="stats" label="Statistics" />
               <TabButton tabName="config" label="Configuration" />
-              <TabButton tabName="knowledge" label="Knowledge Base" />
               <TabButton tabName="tools" label="MCP Tools" />
           </nav>
       </div>
       
       <div className="mt-6">
-        <Suspense fallback={<div>Loading component...</div>}>
-            {activeTab === 'conversations' && <ConversationHistory conversations={conversations} setConversations={setConversations} agentId={agent.id}/>}
+        <Suspense fallback={<div className="text-center p-8">Loading component...</div>}>
+            {activeTab === 'conversations' && <ConversationHistory conversations={conversations} />}
             {activeTab === 'config' && <AgentConfigForm agent={agent} onUpdate={setAgent} />}
-            {activeTab === 'stats' && <StatCard stats={stats} />}
-            {activeTab === 'knowledge' && <KnowledgeBaseManager agentId={agent.id} />}
+            {activeTab === 'stats' && (stats.length > 0 ? <StatCard stats={stats} /> : <div className="text-center p-8 bg-dark-card rounded-lg">No statistics available yet.</div>)}
             {activeTab === 'tools' && <McpToolsManager tools={tools} onUpdate={setTools} />}
         </Suspense>
       </div>
     </div>
   );
 };
-
-const McpToolsManager: React.FC<{ tools: McpTool[]; onUpdate: (tools: McpTool[]) => void }> = ({ tools, onUpdate }) => {
-    // TODO: Migrate to Supabase
-    // const handleToggle = async (toolId: string, enabled: boolean) => {
-    //     const updatedTool = await api.toggleMcpTool(toolId, enabled);
-    //     onUpdate(tools.map(t => t.id === toolId ? updatedTool : t));
-    // };
-
-    return (
-        <div className="bg-dark-card border border-dark-border rounded-lg p-6">
-            <h3 className="text-xl font-semibold mb-4">Manage Integrations (MCP)</h3>
-            <div className="space-y-4">
-                {tools.length === 0 && <p className="text-dark-text-secondary">No tools configured yet.</p>}
-                {tools.map(tool => (
-                    <div key={tool.id} className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
-                        <div>
-                            <p className="font-semibold">{tool.tool_name}</p>
-                            <p className="text-sm text-dark-text-secondary">Status: {tool.tool_config.auth_status}</p>
-                        </div>
-                        <label htmlFor={`toggle-${tool.id}`} className="flex items-center cursor-pointer">
-                            <div className="relative">
-                                {/* <input type="checkbox" id={`toggle-${tool.id}`} className="sr-only" checked={tool.is_enabled} onChange={(e) => handleToggle(tool.id, e.target.checked)} /> */}
-                                <div className="block bg-gray-600 w-14 h-8 rounded-full"></div>
-                                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition ${tool.is_enabled ? 'translate-x-6 bg-brand-primary' : ''}`}></div>
-                            </div>
-                        </label>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
 
 export default AgentDetailPage;

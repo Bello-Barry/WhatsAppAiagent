@@ -8,20 +8,11 @@ class AgentManager {
 
   /**
    * Initializes the manager with agent configurations and starts each agent.
-   * @param {Array<object>} agentConfigs - Array of agent configuration objects from Supabase.
+   * @param {Array<object>} agentConfigs - Array of agent configuration objects.
    */
   async initialize(agentConfigs) {
     for (const config of agentConfigs) {
-      // Adapt Supabase schema to the config expected by WhatsappClient
-      const clientConfig = {
-          id: config.id,
-          ownerName: config.owner_name,
-          assistantName: config.assistant_name,
-          phoneNumber: config.phone_number,
-          llmProvider: config.llm_provider,
-          systemPrompt: config.custom_prompt,
-      };
-      const agent = new WhatsappClient(clientConfig);
+      const agent = new WhatsappClient(config);
       this.agents.set(config.id, agent);
     }
     

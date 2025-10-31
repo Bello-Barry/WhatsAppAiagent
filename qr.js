@@ -7,15 +7,9 @@ const router = Router();
 router.get('/:agentId', async (req, res) => {
   const { agentId } = req.params;
   const agent = agentManager.getAgent(agentId);
-  const userId = req.user.id;
 
   if (!agent) {
-    return res.status(404).json({ error: 'Agent not found or is inactive' });
-  }
-
-  // Security check: ensure the authenticated user owns this agent
-  if (agent.config.userId !== userId) {
-      return res.status(403).json({ error: 'Forbidden: You do not have access to this agent.' });
+    return res.status(404).json({ error: 'Agent not found' });
   }
 
   if (agent.status === 'CONNECTED') {

@@ -19,8 +19,8 @@
   "author": "AI Architect",
   "license": "MIT",
   "dependencies": {
-    "@google/genai": "^1.28.0",
-    "@hapi/boom": "^10.0.1",
+    "@google/genai": "^0.1.0",
+    "@supabase/supabase-js": "^2.39.0",
     "@whiskeysockets/baileys": "^6.5.0",
     "axios": "^1.6.2",
     "cors": "^2.8.5",

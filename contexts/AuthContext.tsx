@@ -1,13 +1,13 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../supabase/client';
+import { supabase, mapSupabaseUserToAppUser } from '../services/supabase';
 import { User } from '../types';
-import { AuthChangeEvent, Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, pass: string) => Promise<any>;
-  logout: () => Promise<void>;
+  logout: () => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,29 +17,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
+    const getInitialSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const appUser = mapSupabaseUserToAppUser(session?.user);
+        setUser(appUser);
+        setLoading(false);
+    };
+
+    getInitialSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, session: Session | null) => {
-        if (session?.user) {
-          setUser({ id: session.user.id, email: session.user.email });
-        } else {
-          setUser(null);
+        const appUser = mapSupabaseUserToAppUser(session?.user);
+        setUser(appUser);
+        if (_event === 'INITIAL_SESSION') {
+            setLoading(false);
         }
-        setLoading(false);
       }
     );
-    
-    // Check for initial session
-    const checkSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-         if (session?.user) {
-          setUser({ id: session.user.id, email: session.user.email });
-        } else {
-          setUser(null);
-        }
-        setLoading(false);
-    }
-    checkSession();
 
     return () => {
       subscription?.unsubscribe();
@@ -54,7 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    setUser(null);
   };
 
   return (

@@ -1,60 +1,118 @@
 import { Router } from 'express';
 import { agentManager } from '../../core/agent-manager.js';
 import logger from '../../utils/logger.js';
-import { supabase } from '../../core/supabase-client.js';
-
+import { supabase } from '../../config/supabase-client.js';
 
 const router = Router();
 
-// This route is less critical now as the frontend can fetch from supabase directly.
-// It can be used for admin purposes or for data that isn't in the DB.
+// Helper to format agent data for the frontend, combining DB data with live status
+const formatAgentForAPI = async (agentFromDb) => {
+    const liveAgent = agentManager.getAgent(agentFromDb.id);
+    return {
+        ...agentFromDb,
+        is_active: liveAgent ? liveAgent.status === 'CONNECTED' : false,
+        phone_number: liveAgent?.getJid()?.split('@')[0] || agentFromDb.phone_number,
+    };
+};
+
+// GET /api/agents - List all agents for the authenticated user
 router.get('/', async (req, res) => {
-    const { data, error } = await supabase.from('agents').select('*');
+    const { data: agents, error } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('user_id', req.user.id);
+    
     if (error) {
-        logger.error(error);
-        return res.status(500).json({ error: 'Failed to fetch agents' });
+        logger.error(error, 'Failed to fetch agents for user');
+        return res.status(500).json({ error: 'Could not fetch agents' });
     }
-    res.status(200).json(data);
+
+    const formattedAgents = await Promise.all(agents.map(formatAgentForAPI));
+    res.json(formattedAgents);
 });
 
-// This can be used to check the live status from the agent manager instance
-router.get('/:agentId/status', (req, res) => {
-  const { agentId } = req.params;
-  const agent = agentManager.getAgent(agentId);
+// GET /api/agents/:agentId - Get a single agent's details
+router.get('/:agentId', async (req, res) => {
+    const { agentId } = req.params;
+    const { data: agent, error } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('id', agentId)
+        .eq('user_id', req.user.id)
+        .single();
 
-  if (!agent) {
-    return res.status(404).json({ error: 'Agent not found or not running' });
-  }
-
-  res.status(200).json({
-      id: agent.id,
-      status: agent.status,
-      qr: agent.qr
-  });
+    if (error || !agent) {
+        return res.status(404).json({ error: 'Agent not found' });
+    }
+    res.json(await formatAgentForAPI(agent));
 });
 
+// PUT /api/agents/:agentId - Update an agent
+router.put('/:agentId', async (req, res) => {
+    const { agentId } = req.params;
+    const { owner_name, assistant_name, llm_provider, custom_prompt } = req.body;
+    
+    const { data, error } = await supabase
+        .from('agents')
+        .update({ owner_name, assistant_name, llm_provider, custom_prompt })
+        .eq('id', agentId)
+        .eq('user_id', req.user.id)
+        .select()
+        .single();
 
-// GET /api/agents/:id/stats - Get mocked stats for an agent
+    if (error || !data) {
+        logger.error(error, 'Failed to update agent');
+        return res.status(404).json({ error: 'Agent not found or update failed' });
+    }
+
+    // Also update the live agent's config in memory
+    const liveAgent = agentManager.getAgent(agentId);
+    if (liveAgent) {
+        liveAgent.config.ownerName = data.owner_name;
+        liveAgent.config.assistantName = data.assistant_name;
+        liveAgent.config.llmProvider = data.llm_provider;
+        liveAgent.config.systemPrompt = data.custom_prompt;
+        logger.info(`Updated live config for agent ${agentId}`);
+    }
+
+    res.json(await formatAgentForAPI(data));
+});
+
+// GET /api/agents/:agentId/conversations
+router.get('/:agentId/conversations', async (req, res) => {
+    const { agentId } = req.params;
+    // First, verify the user owns the agent
+    const { count, error: agentError } = await supabase
+        .from('agents')
+        .select('*', { count: 'exact', head: true })
+        .eq('id', agentId)
+        .eq('user_id', req.user.id);
+    
+    if (agentError || count === 0) {
+        return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    // Fetch conversations for that agent
+    const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('agent_id', agentId);
+    
+    if (error) {
+        logger.error(error, 'Failed to fetch conversations');
+        return res.status(500).json({ error: 'Could not fetch conversations' });
+    }
+    res.json(data);
+});
+
+// GET /api/agents/:agentId/stats
 router.get('/:agentId/stats', (req, res) => {
-  const { agentId } = req.params;
-   if (!agentManager.getAgent(agentId)) {
-    return res.status(404).json({ error: 'Agent not found' });
-  }
-
-  // Generate mock stats for the last 7 days
-  const stats = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    stats.push({
-      date: date.toISOString().split('T')[0],
-      messages_sent: Math.floor(Math.random() * (70 - 20 + 1)) + 20,
-      messages_received: Math.floor(Math.random() * (60 - 15 + 1)) + 15,
-      avg_response_time_ms: Math.floor(Math.random() * (3500 - 1200 + 1)) + 1200,
-    });
-  }
-  res.status(200).json(stats);
+    res.json([]);
 });
 
+// GET /api/agents/:agentId/tools
+router.get('/:agentId/tools', (req, res) => {
+    res.json([]);
+});
 
 export default router;

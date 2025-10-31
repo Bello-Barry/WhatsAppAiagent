@@ -1,72 +1,63 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, Message } from '../types';
 import { SendIcon } from './icons/SendIcon';
-import { supabaseApi } from '../services/supabaseApi';
-import { supabase } from '../supabase/client';
+// The real api is now implicitly used project-wide. No need for a specific API call here for sending messages from the dashboard yet.
 
 interface ConversationHistoryProps {
   conversations: Conversation[];
-  setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
-  agentId: string;
 }
 
-const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations, setConversations, agentId }) => {
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(conversations[0] || null);
-  const [messages, setMessages] = useState<Message[]>([]);
+const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations }) => {
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!selectedConversation) return;
-
-    const fetchMessages = async () => {
-        const fetchedMessages = await supabaseApi.getMessages(selectedConversation.id);
-        setMessages(fetchedMessages);
+    // Select the first conversation by default if it exists and none is selected
+    if (!selectedConversation && conversations.length > 0) {
+      // Find the most recent conversation to display first
+      const sortedConversations = [...conversations].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+      setSelectedConversation(sortedConversations[0]);
     }
-    fetchMessages();
-
-    const channel = supabase.channel(`conversation-${selectedConversation.id}`)
-        .on<Message>(
-            'postgres_changes', 
-            { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${selectedConversation.id}` }, 
-            payload => {
-                setMessages(currentMessages => [...currentMessages, payload.new as Message]);
-            }
-        )
-        .subscribe();
-    
-    return () => {
-        supabase.removeChannel(channel);
-    }
-
-  }, [selectedConversation]);
-
+  }, [conversations, selectedConversation]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [selectedConversation?.messages]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConversation) return;
 
-    try {
-        await supabaseApi.sendMessage(selectedConversation.id, newMessage, 'user');
-        setNewMessage('');
-    } catch(err) {
-        console.error("Failed to send message", err);
-    }
+    // This feature (sending a message from the dashboard on behalf of the agent)
+    // is a future enhancement. For now, this UI is read-only for conversation history.
+    // The logic below is a visual mock to show how it would look.
+    const assistantMessage: Message = {
+      sender: 'assistant',
+      content: newMessage,
+      timestamp: new Date().toISOString()
+    };
+    
+    setSelectedConversation(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
+            last_message_at: new Date().toISOString()
+        }
+    });
+
+    setNewMessage('');
+    
+    // In a real implementation, you would call:
+    // await api.sendMessage(selectedConversation.agent_id, selectedConversation.contact_number, newMessage);
+    // And then refresh the conversation list.
   };
-  
-  const handleSelectConversation = (convo: Conversation) => {
-      setMessages([]); // Clear messages while new ones are loading
-      setSelectedConversation(convo);
-  }
 
   if (conversations.length === 0) {
       return (
-          <div className="bg-dark-card border border-dark-border rounded-lg p-6 text-center text-dark-text-secondary">
-              No conversations yet.
+          <div className="bg-dark-card border border-dark-border rounded-lg p-6 text-center text-dark-text-secondary h-[70vh] flex items-center justify-center">
+              No conversations yet for this agent.
           </div>
       );
   }
@@ -75,16 +66,21 @@ const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations
     <div className="flex flex-col md:flex-row h-[70vh] bg-dark-card border border-dark-border rounded-lg overflow-hidden">
       {/* Conversation List */}
       <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-dark-border flex-shrink-0 overflow-y-auto">
-        {conversations.map(convo => (
+        {conversations
+          .sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime())
+          .map(convo => (
           <div
             key={convo.id}
-            onClick={() => handleSelectConversation(convo)}
+            onClick={() => setSelectedConversation(convo)}
             className={`p-4 cursor-pointer border-b border-dark-border last:border-b-0 ${selectedConversation?.id === convo.id ? 'bg-brand-primary/10' : 'hover:bg-gray-900/50'}`}
           >
-            <p className="font-semibold">{convo.contact_number}</p>
-            {/* <p className="text-sm text-dark-text-secondary truncate">
+            <p className="font-semibold text-dark-text-primary">{convo.contact_number}</p>
+            <p className="text-sm text-dark-text-secondary truncate">
               {convo.messages[convo.messages.length - 1].content}
-            </p> */}
+            </p>
+            <p className="text-xs text-gray-500 mt-1 text-right">
+              {new Date(convo.last_message_at).toLocaleString()}
+            </p>
           </div>
         ))}
       </div>
@@ -94,26 +90,26 @@ const ConversationHistory: React.FC<ConversationHistoryProps> = ({ conversations
         {selectedConversation ? (
           <>
             <div className="flex-1 p-6 overflow-y-auto space-y-4">
-              {messages.map((msg, index) => (
+              {selectedConversation.messages.map((msg, index) => (
                 <div key={index} className={`flex ${msg.sender === 'assistant' ? 'justify-start' : 'justify-end'}`}>
                   <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${msg.sender === 'assistant' ? 'bg-gray-700 rounded-bl-none' : 'bg-brand-secondary text-white rounded-br-none'}`}>
                     <p className="text-sm">{msg.content}</p>
                     <p className="text-xs opacity-60 text-right mt-1">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
-            <div className="p-4 border-t border-dark-border">
+            <div className="p-4 border-t border-dark-border bg-gray-900">
               <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1 bg-gray-900 border border-dark-border rounded-full py-2 px-4 focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                  placeholder="Send a message as the assistant..."
+                  className="flex-1 bg-dark-card border border-dark-border rounded-full py-2 px-4 focus:outline-none focus:ring-1 focus:ring-brand-primary"
                 />
                 <button type="submit" className="bg-brand-primary p-2.5 rounded-full text-white hover:bg-brand-secondary transition-colors">
                   <SendIcon className="w-5 h-5" />
